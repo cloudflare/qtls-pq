@@ -179,6 +179,8 @@ type halfConn struct {
 	nextMac    hash.Hash // next MAC algorithm
 
 	trafficSecret []byte // current TLS 1.3 traffic secret
+
+	setKeyCallback func(encLevel EncryptionLevel, suite *CipherSuiteTLS13, trafficSecret []byte)
 }
 
 type permanentError struct {
@@ -221,6 +223,18 @@ func (hc *halfConn) changeCipherSpec() error {
 		hc.seq[i] = 0
 	}
 	return nil
+}
+
+func (hc *halfConn) exportKey(encLevel EncryptionLevel, suite *cipherSuiteTLS13, trafficSecret []byte) {
+	if hc.setKeyCallback != nil {
+		s := &CipherSuiteTLS13{
+			ID:     suite.id,
+			KeyLen: suite.keyLen,
+			Hash:   suite.hash,
+			AEAD:   func(key, fixedNonce []byte) cipher.AEAD { return suite.aead(key, fixedNonce) },
+		}
+		hc.setKeyCallback(encLevel, s, trafficSecret)
+	}
 }
 
 func (hc *halfConn) setTrafficSecret(suite *cipherSuiteTLS13, secret []byte) {
@@ -455,6 +469,13 @@ func (hc *halfConn) decrypt(record []byte) ([]byte, recordType, error) {
 
 	hc.incSeq()
 	return plaintext, typ, nil
+}
+
+func (c *Conn) setAlternativeRecordLayer() {
+	if c.extraConfig != nil && c.extraConfig.AlternativeRecordLayer != nil {
+		c.in.setKeyCallback = c.extraConfig.AlternativeRecordLayer.SetReadKey
+		c.out.setKeyCallback = c.extraConfig.AlternativeRecordLayer.SetWriteKey
+	}
 }
 
 // sliceForAppend extends the input slice by n bytes. head is the full extended
@@ -834,6 +855,11 @@ func (c *Conn) sendAlertLocked(err alert) error {
 
 // sendAlert sends a TLS alert message.
 func (c *Conn) sendAlert(err alert) error {
+	if c.extraConfig != nil && c.extraConfig.AlternativeRecordLayer != nil {
+		c.extraConfig.AlternativeRecordLayer.SendAlert(uint8(err))
+		return &net.OpError{Op: "local error", Err: err}
+	}
+
 	c.out.Lock()
 	defer c.out.Unlock()
 	return c.sendAlertLocked(err)
@@ -1010,15 +1036,20 @@ func (c *Conn) writeRecordLocked(typ recordType, data []byte) (int, error) {
 // the record layer state. If transcript is non-nil the marshalled message is
 // written to it.
 func (c *Conn) writeHandshakeRecord(msg handshakeMessage, transcript transcriptHash) (int, error) {
-	c.out.Lock()
-	defer c.out.Unlock()
-
 	data, err := msg.marshal()
 	if err != nil {
 		return 0, err
 	}
+
+	c.out.Lock()
+	defer c.out.Unlock()
+
 	if transcript != nil {
 		transcript.Write(data)
+	}
+
+	if c.extraConfig != nil && c.extraConfig.AlternativeRecordLayer != nil {
+		return c.extraConfig.AlternativeRecordLayer.WriteRecord(data)
 	}
 
 	return c.writeRecordLocked(recordTypeHandshake, data)
@@ -1027,6 +1058,10 @@ func (c *Conn) writeHandshakeRecord(msg handshakeMessage, transcript transcriptH
 // writeChangeCipherRecord writes a ChangeCipherSpec message to the connection and
 // updates the record layer state.
 func (c *Conn) writeChangeCipherRecord() error {
+	if c.extraConfig != nil && c.extraConfig.AlternativeRecordLayer != nil {
+		return nil
+	}
+
 	c.out.Lock()
 	defer c.out.Unlock()
 	_, err := c.writeRecordLocked(recordTypeChangeCipherSpec, []byte{1})
@@ -1037,24 +1072,33 @@ func (c *Conn) writeChangeCipherRecord() error {
 // the record layer. If transcript is non-nil, the message
 // is written to the passed transcriptHash.
 func (c *Conn) readHandshake(transcript transcriptHash) (any, error) {
-	for c.hand.Len() < 4 {
-		if err := c.readRecord(); err != nil {
+	var data []byte
+	if c.extraConfig != nil && c.extraConfig.AlternativeRecordLayer != nil {
+		var err error
+		data, err = c.extraConfig.AlternativeRecordLayer.ReadHandshakeMessage()
+		if err != nil {
 			return nil, err
 		}
-	}
+	} else {
+		for c.hand.Len() < 4 {
+			if err := c.readRecord(); err != nil {
+				return nil, err
+			}
+		}
 
-	data := c.hand.Bytes()
-	n := int(data[1])<<16 | int(data[2])<<8 | int(data[3])
-	if n > maxHandshake {
-		c.sendAlertLocked(alertInternalError)
-		return nil, c.in.setErrorLocked(fmt.Errorf("tls: handshake message of length %d bytes exceeds maximum of %d bytes", n, maxHandshake))
-	}
-	for c.hand.Len() < 4+n {
-		if err := c.readRecord(); err != nil {
-			return nil, err
+		data = c.hand.Bytes()
+		n := int(data[1])<<16 | int(data[2])<<8 | int(data[3])
+		if n > maxHandshake {
+			c.sendAlertLocked(alertInternalError)
+			return nil, c.in.setErrorLocked(fmt.Errorf("tls: handshake message of length %d bytes exceeds maximum of %d bytes", n, maxHandshake))
 		}
+		for c.hand.Len() < 4+n {
+			if err := c.readRecord(); err != nil {
+				return nil, err
+			}
+		}
+		data = c.hand.Next(4 + n)
 	}
-	data = c.hand.Next(4 + n)
 	var m handshakeMessage
 	switch data[0] {
 	case typeHelloRequest:
