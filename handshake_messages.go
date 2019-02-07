@@ -93,6 +93,7 @@ type clientHelloMsg struct {
 	pskModes                         []uint8
 	pskIdentities                    []pskIdentity
 	pskBinders                       [][]byte
+	additionalExtensions             []Extension
 }
 
 func (m *clientHelloMsg) marshal() ([]byte, error) {
@@ -244,6 +245,12 @@ func (m *clientHelloMsg) marshal() ([]byte, error) {
 			exts.AddUint8LengthPrefixed(func(exts *cryptobyte.Builder) {
 				exts.AddBytes(m.pskModes)
 			})
+		})
+	}
+	for _, ext := range m.additionalExtensions {
+		exts.AddUint16(ext.Type)
+		exts.AddUint16LengthPrefixed(func(exts *cryptobyte.Builder) {
+			exts.AddBytes(ext.Data)
 		})
 	}
 	if len(m.pskIdentities) > 0 { // pre_shared_key must be the last extension
@@ -591,7 +598,7 @@ func (m *clientHelloMsg) unmarshal(data []byte) bool {
 				m.pskBinders = append(m.pskBinders, binder)
 			}
 		default:
-			// Ignore unknown extensions.
+			m.additionalExtensions = append(m.additionalExtensions, Extension{Type: extension, Data: extData})
 			continue
 		}
 
