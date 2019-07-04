@@ -317,6 +317,22 @@ func (hs *serverHandshakeStateTLS13) checkForResumption() error {
 			return err
 		}
 
+		h := cloneHash(hs.transcript, hs.suite.hash)
+		clientHelloWithBindersBytes, err := hs.clientHello.marshal()
+		if err != nil {
+			c.sendAlert(alertInternalError)
+			return err
+		}
+		h.Write(clientHelloWithBindersBytes)
+		if sessionState.maxEarlyData > 0 && c.extraConfig != nil && c.extraConfig.MaxEarlyData > 0 {
+			clientEarlySecret := hs.suite.deriveSecret(hs.earlySecret, "c e traffic", h)
+			c.in.exportKey(Encryption0RTT, hs.suite, clientEarlySecret)
+			if err := c.config.writeKeyLog(keyLogLabelEarlyTraffic, hs.clientHello.random, clientEarlySecret); err != nil {
+				c.sendAlert(alertInternalError)
+				return err
+			}
+		}
+
 		hs.hello.selectedIdentityPresent = true
 		hs.hello.selectedIdentity = uint16(i)
 		hs.usingPSK = true
