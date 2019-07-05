@@ -184,6 +184,21 @@ func (c *Conn) clientHandshake(ctx context.Context) (err error) {
 		return err
 	}
 	if cacheKey != "" && session != nil {
+		if session.vers == VersionTLS13 && hello.earlyData && c.extraConfig != nil && c.extraConfig.Enable0RTT {
+			if suite := cipherSuiteTLS13ByID(session.cipherSuite); suite != nil {
+				h := suite.hash.New()
+				helloBytes, err := hello.marshal()
+				if err != nil {
+					return err
+				}
+				h.Write(helloBytes)
+				clientEarlySecret := suite.deriveSecret(earlySecret, "c e traffic", h)
+				c.out.exportKey(Encryption0RTT, suite, clientEarlySecret)
+				if err := c.config.writeKeyLog(keyLogLabelEarlyTraffic, hello.random, clientEarlySecret); err != nil {
+					return err
+				}
+			}
+		}
 		defer func() {
 			// If we got a handshake failure when resuming a session, throw away
 			// the session ticket. See RFC 5077, Section 3.2.
@@ -343,7 +358,6 @@ func (c *Conn) loadSession(hello *clientHelloMsg) (cacheKey string,
 		return cacheKey, nil, nil, nil, nil
 	}
 	maxEarlyData := binary.BigEndian.Uint32(session.nonce[:4])
-	_ = maxEarlyData
 	session.nonce = session.nonce[4:]
 
 	// Check that the session ticket is not expired.
@@ -384,6 +398,9 @@ func (c *Conn) loadSession(hello *clientHelloMsg) (cacheKey string,
 		session.nonce, cipherSuite.hash.Size())
 	earlySecret = cipherSuite.extract(psk, nil)
 	binderKey = cipherSuite.deriveSecret(earlySecret, resumptionBinderLabel, nil)
+	if c.extraConfig != nil {
+		hello.earlyData = c.extraConfig.Enable0RTT && maxEarlyData > 0
+	}
 	transcript := cipherSuite.hash.New()
 	helloBytes, err := hello.marshalWithoutBinders()
 	if err != nil {
