@@ -262,6 +262,9 @@ func (*encryptedExtensionsMsg) Generate(rand *rand.Rand, size int) reflect.Value
 	if rand.Intn(10) > 5 {
 		m.alpnProtocol = randomString(rand.Intn(32)+1, rand)
 	}
+	if rand.Intn(10) > 5 {
+		m.earlyData = true
+	}
 
 	return reflect.ValueOf(m)
 }
