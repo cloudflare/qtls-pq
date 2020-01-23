@@ -123,6 +123,8 @@ type Conn struct {
 	// the rest of the bits are the number of goroutines in Conn.Write.
 	activeCall atomic.Int32
 
+	used0RTT bool
+
 	tmp [16]byte
 }
 
@@ -1537,6 +1539,16 @@ func (c *Conn) ConnectionState() ConnectionState {
 	c.handshakeMutex.Lock()
 	defer c.handshakeMutex.Unlock()
 	return c.connectionStateLocked()
+}
+
+// ConnectionStateWith0RTT returns basic TLS details (incl. 0-RTT status) about the connection.
+func (c *Conn) ConnectionStateWith0RTT() ConnectionStateWith0RTT {
+	c.handshakeMutex.Lock()
+	defer c.handshakeMutex.Unlock()
+	return ConnectionStateWith0RTT{
+		ConnectionState: c.connectionStateLocked(),
+		Used0RTT:        c.used0RTT,
+	}
 }
 
 func (c *Conn) connectionStateLocked() ConnectionState {
