@@ -15,6 +15,8 @@ import (
 	"errors"
 	"hash"
 	"time"
+
+	"golang.org/x/crypto/cryptobyte"
 )
 
 type clientHandshakeStateTLS13 struct {
@@ -716,6 +718,20 @@ func (c *Conn) handleNewSessionTicket(msg *newSessionTicketMsgTLS13) error {
 	binary.BigEndian.PutUint32(nonceWithEarlyData, msg.maxEarlyData)
 	copy(nonceWithEarlyData[4:], msg.nonce)
 
+	var appData []byte
+	if c.extraConfig != nil && c.extraConfig.GetAppDataForSessionState != nil {
+		appData = c.extraConfig.GetAppDataForSessionState()
+	}
+	var b cryptobyte.Builder
+	b.AddUint16(clientSessionStateVersion) // revision
+	b.AddUint32(msg.maxEarlyData)
+	b.AddUint16LengthPrefixed(func(b *cryptobyte.Builder) {
+		b.AddBytes(appData)
+	})
+	b.AddUint16LengthPrefixed(func(b *cryptobyte.Builder) {
+		b.AddBytes(msg.nonce)
+	})
+
 	// Save the resumption_master_secret and nonce instead of deriving the PSK
 	// to do the least amount of work on NewSessionTicket messages before we
 	// know if the ticket will be used. Forward secrecy of resumed connections
@@ -728,7 +744,7 @@ func (c *Conn) handleNewSessionTicket(msg *newSessionTicketMsgTLS13) error {
 		serverCertificates: c.peerCertificates,
 		verifiedChains:     c.verifiedChains,
 		receivedAt:         c.config.time(),
-		nonce:              nonceWithEarlyData,
+		nonce:              b.BytesOrPanic(),
 		useBy:              c.config.time().Add(lifetime),
 		ageAdd:             msg.ageAdd,
 		ocspResponse:       c.ocspResponse,
