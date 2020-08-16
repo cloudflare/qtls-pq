@@ -149,7 +149,7 @@ func (c *Conn) makeClientHello() (*clientHelloMsg, *ecdh.PrivateKey, error) {
 
 func (c *Conn) clientHandshake(ctx context.Context) (err error) {
 	if c.config == nil {
-		c.config = defaultConfig()
+		c.config = fromConfig(defaultConfig())
 	}
 
 	// This may be a renegotiation handshake, in which case some fields
@@ -1004,7 +1004,7 @@ func (c *Conn) getClientCertificate(cri *CertificateRequestInfo) (*Certificate, 
 
 // clientSessionCacheKey returns a key used to cache sessionTickets that could
 // be used to resume previously negotiated TLS sessions with a server.
-func clientSessionCacheKey(serverAddr net.Addr, config *Config) string {
+func clientSessionCacheKey(serverAddr net.Addr, config *config) string {
 	if len(config.ServerName) > 0 {
 		return config.ServerName
 	}
