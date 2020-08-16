@@ -1487,7 +1487,7 @@ func (c *Conn) ConnectionState() ConnectionState {
 }
 
 func (c *Conn) connectionStateLocked() ConnectionState {
-	var state ConnectionState
+	var state connectionState
 	state.HandshakeComplete = c.isHandshakeComplete.Load()
 	state.Version = c.vers
 	state.NegotiatedProtocol = c.clientProtocol
@@ -1511,7 +1511,7 @@ func (c *Conn) connectionStateLocked() ConnectionState {
 	} else {
 		state.ekm = c.ekm
 	}
-	return state
+	return toConnectionState(state)
 }
 
 // OCSPResponse returns the stapled OCSP response from the TLS server, if
