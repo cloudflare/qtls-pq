@@ -10,7 +10,6 @@ import (
 	"crypto/cipher"
 	"crypto/des"
 	"crypto/hmac"
-	"crypto/internal/boring"
 	"crypto/rc4"
 	"crypto/sha1"
 	"crypto/sha256"
@@ -423,11 +422,7 @@ func cipherAES(key, iv []byte, isRead bool) any {
 // macSHA1 returns a SHA-1 based constant time MAC.
 func macSHA1(key []byte) hash.Hash {
 	h := sha1.New
-	// The BoringCrypto SHA1 does not have a constant-time
-	// checksum function, so don't try to use it.
-	if !boring.Enabled {
-		h = newConstantTimeHash(h)
-	}
+	h = newConstantTimeHash(h)
 	return hmac.New(h, key)
 }
 
@@ -517,12 +512,7 @@ func aeadAESGCM(key, noncePrefix []byte) aead {
 		panic(err)
 	}
 	var aead cipher.AEAD
-	if boring.Enabled {
-		aead, err = boring.NewGCMTLS(aes)
-	} else {
-		boring.Unreachable()
-		aead, err = cipher.NewGCM(aes)
-	}
+	aead, err = cipher.NewGCM(aes)
 	if err != nil {
 		panic(err)
 	}
@@ -582,7 +572,6 @@ func (c *cthWrapper) Write(p []byte) (int, error) { return c.h.Write(p) }
 func (c *cthWrapper) Sum(b []byte) []byte         { return c.h.ConstantTimeSum(b) }
 
 func newConstantTimeHash(h func() hash.Hash) func() hash.Hash {
-	boring.Unreachable()
 	return func() hash.Hash {
 		return &cthWrapper{h().(constantTimeHash)}
 	}
