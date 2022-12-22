@@ -56,6 +56,7 @@ func (hs *serverHandshakeStateTLS13) handshake() error {
 	if err := hs.checkForResumption(); err != nil {
 		return err
 	}
+	c.updateConnectionState()
 	if err := hs.pickCertificate(); err != nil {
 		return err
 	}
@@ -78,12 +79,13 @@ func (hs *serverHandshakeStateTLS13) handshake() error {
 	if err := hs.readClientCertificate(); err != nil {
 		return err
 	}
+	c.updateConnectionState()
 	if err := hs.readClientFinished(); err != nil {
 		return err
 	}
 
 	c.isHandshakeComplete.Store(true)
-
+	c.updateConnectionState()
 	return nil
 }
 
