@@ -74,8 +74,26 @@ func TestAlternativeRecordLayer(t *testing.T) {
 	cOut := make(chan interface{}, 10)
 	defer close(cOut)
 
-	serverKeyChan := make(chan *exportedKey, 4) // see server loop for the order in which keys are provided
+	testConfig := testConfig.Clone()
+	testConfig.NextProtos = []string{"alpn"}
+
 	// server side
+	errChan := make(chan error)
+	serverConn := Server(
+		&unusedConn{},
+		testConfig,
+		&ExtraConfig{AlternativeRecordLayer: &recordLayerWithKeys{in: sIn, out: sOut}},
+	)
+	go func() {
+		defer serverConn.Close()
+		err := serverConn.Handshake()
+		connState := serverConn.ConnectionState()
+		if !connState.HandshakeComplete {
+			t.Fatal("expected the handshake to have completed")
+		}
+		errChan <- err
+	}()
+	serverKeyChan := make(chan *exportedKey, 4) // see server loop for the order in which keys are provided
 	go func() {
 		var counter int
 		for {
@@ -87,6 +105,16 @@ func TestAlternativeRecordLayer(t *testing.T) {
 			case 0:
 				if c.([]byte)[0] != typeServerHello {
 					t.Errorf("expected ServerHello")
+				}
+				connState := serverConn.ConnectionState()
+				if connState.HandshakeComplete {
+					t.Error("didn't expect the handshake to be complete yet")
+				}
+				if connState.Version != VersionTLS13 {
+					t.Errorf("expected TLS 1.3, got %x", connState.Version)
+				}
+				if connState.NegotiatedProtocol == "" {
+					t.Error("expected ALPN to be negotiated")
 				}
 			case 1:
 				keyEv := c.(*exportedKey)
@@ -139,6 +167,12 @@ func TestAlternativeRecordLayer(t *testing.T) {
 	}()
 
 	// client side
+	clientConn := Client(
+		&unusedConn{},
+		testConfig,
+		&ExtraConfig{AlternativeRecordLayer: &recordLayerWithKeys{in: cIn, out: cOut}},
+	)
+	defer clientConn.Close()
 	go func() {
 		var counter int
 		for {
@@ -150,6 +184,13 @@ func TestAlternativeRecordLayer(t *testing.T) {
 			case 0:
 				if c.([]byte)[0] != typeClientHello {
 					t.Errorf("expected ClientHello")
+				}
+				connState := clientConn.ConnectionState()
+				if connState.HandshakeComplete {
+					t.Error("didn't expect the handshake to be complete yet")
+				}
+				if len(connState.PeerCertificates) != 0 {
+					t.Error("didn't expect a certificate yet")
 				}
 			case 1:
 				keyEv := c.(*exportedKey)
@@ -189,23 +230,18 @@ func TestAlternativeRecordLayer(t *testing.T) {
 		}
 	}()
 
-	errChan := make(chan error)
-	go func() {
-		extraConf := &ExtraConfig{
-			AlternativeRecordLayer: &recordLayerWithKeys{in: sIn, out: sOut},
-		}
-		tlsConn := Server(&unusedConn{}, testConfig, extraConf)
-		defer tlsConn.Close()
-		errChan <- tlsConn.Handshake()
-	}()
-
-	extraConf := &ExtraConfig{
-		AlternativeRecordLayer: &recordLayerWithKeys{in: cIn, out: cOut},
-	}
-	tlsConn := Client(&unusedConn{}, testConfig, extraConf)
-	defer tlsConn.Close()
-	if err := tlsConn.Handshake(); err != nil {
+	if err := clientConn.Handshake(); err != nil {
 		t.Fatalf("Handshake failed: %s", err)
+	}
+	connState := clientConn.ConnectionState()
+	if !connState.HandshakeComplete {
+		t.Fatal("expected the handshake to have completed")
+	}
+	if connState.Version != VersionTLS13 {
+		t.Errorf("expected TLS 1.3, got %x", connState.Version)
+	}
+	if len(connState.PeerCertificates) == 0 {
+		t.Fatal("expected the certificate to be set")
 	}
 
 	select {
