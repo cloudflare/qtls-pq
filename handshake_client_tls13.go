@@ -82,6 +82,7 @@ func (hs *clientHandshakeStateTLS13) handshake() error {
 	if err := hs.processServerHello(); err != nil {
 		return err
 	}
+	c.updateConnectionState()
 	if err := hs.sendDummyChangeCipherSpec(); err != nil {
 		return err
 	}
@@ -94,6 +95,7 @@ func (hs *clientHandshakeStateTLS13) handshake() error {
 	if err := hs.readServerCertificate(); err != nil {
 		return err
 	}
+	c.updateConnectionState()
 	if err := hs.readServerFinished(); err != nil {
 		return err
 	}
@@ -108,7 +110,7 @@ func (hs *clientHandshakeStateTLS13) handshake() error {
 	}
 
 	c.isHandshakeComplete.Store(true)
-
+	c.updateConnectionState()
 	return nil
 }
 
