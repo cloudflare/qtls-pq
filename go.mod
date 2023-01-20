@@ -1,4 +1,4 @@
-module github.com/marten-seemann/qtls-go1-19
+module github.com/quic-go/qtls-go1-19
 
 go 1.19
 
