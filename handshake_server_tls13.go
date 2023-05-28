@@ -10,7 +10,6 @@ import (
 	"crypto"
 	"crypto/hmac"
 	"crypto/rsa"
-	"encoding/binary"
 	"errors"
 	"hash"
 	"io"
@@ -745,6 +744,10 @@ func (hs *serverHandshakeStateTLS13) shouldSendSessionTickets() bool {
 		return false
 	}
 
+	// QUIC tickets are sent by QUICConn.SendSessionTicket, not automatically.
+	if hs.c.quic != nil {
+		return false
+	}
 	// Don't send tickets the client wouldn't use. See RFC 8446, Section 4.2.9.
 	for _, pskMode := range hs.clientHello.pskModes {
 		if pskMode == pskModeDHE {
@@ -764,13 +767,20 @@ func (hs *serverHandshakeStateTLS13) sendSessionTickets() error {
 	if err := transcriptMsg(finishedMsg, hs.transcript); err != nil {
 		return err
 	}
+	c.resumptionSecret = hs.suite.deriveSecret(hs.masterSecret,
+		resumptionLabel, hs.transcript)
 
 	if !hs.shouldSendSessionTickets() {
 		return nil
 	}
+	return c.sendSessionTicket()
+}
 
-	resumptionSecret := hs.suite.deriveSecret(hs.masterSecret,
-		resumptionLabel, hs.transcript)
+func (c *Conn) sendSessionTicket() error {
+	suite := cipherSuiteTLS13ByID(c.cipherSuite)
+	if suite == nil {
+		return errors.New("tls: internal error: unknown cipher suite")
+	}
 
 	m := new(newSessionTicketMsgTLS13)
 
@@ -779,9 +789,9 @@ func (hs *serverHandshakeStateTLS13) sendSessionTickets() error {
 		certsFromClient = append(certsFromClient, cert.Raw)
 	}
 	state := sessionStateTLS13{
-		cipherSuite:      hs.suite.id,
+		cipherSuite:      suite.id,
 		createdAt:        uint64(c.config.time().Unix()),
-		resumptionSecret: resumptionSecret,
+		resumptionSecret: c.resumptionSecret,
 		certificate: Certificate{
 			Certificate:                 certsFromClient,
 			OCSPStaple:                  c.ocspResponse,
@@ -803,14 +813,10 @@ func (hs *serverHandshakeStateTLS13) sendSessionTickets() error {
 	// The value is not stored anywhere; we never need to check the ticket age
 	// because 0-RTT is not supported.
 	ageAdd := make([]byte, 4)
-	_, err = hs.c.config.rand().Read(ageAdd)
+	_, err = c.config.rand().Read(ageAdd)
 	if err != nil {
 		return err
 	}
-	m.ageAdd = binary.LittleEndian.Uint32(ageAdd)
-
-	// ticket_nonce, which must be unique per connection, is always left at
-	// zero because we only ever send one ticket per connection.
 
 	if _, err := c.writeHandshakeRecord(m, nil); err != nil {
 		return err

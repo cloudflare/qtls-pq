@@ -12,9 +12,8 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"errors"
-	"io"
-
 	"golang.org/x/crypto/cryptobyte"
+	"io"
 )
 
 // sessionState contains the information that is serialized into a session
