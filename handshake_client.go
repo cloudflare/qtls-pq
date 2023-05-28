@@ -31,7 +31,7 @@ type clientHandshakeState struct {
 	suite        *cipherSuite
 	finishedHash finishedHash
 	masterSecret []byte
-	session      *ClientSessionState
+	session      *clientSessionState
 }
 
 var testingOnlyForceClientHelloSignatureAlgorithms []SignatureScheme
@@ -258,14 +258,14 @@ func (c *Conn) clientHandshake(ctx context.Context) (err error) {
 	// If we had a successful handshake and hs.session is different from
 	// the one already cached - cache a new one.
 	if cacheKey != "" && hs.session != nil && session != hs.session {
-		c.config.ClientSessionCache.Put(cacheKey, hs.session)
+		c.config.ClientSessionCache.Put(cacheKey, toClientSessionState(hs.session))
 	}
 
 	return nil
 }
 
 func (c *Conn) loadSession(hello *clientHelloMsg) (cacheKey string,
-	session *ClientSessionState, earlySecret, binderKey []byte, err error) {
+	session *clientSessionState, earlySecret, binderKey []byte, err error) {
 	if c.config.SessionTicketsDisabled || c.config.ClientSessionCache == nil {
 		return "", nil, nil, nil, nil
 	}
@@ -290,10 +290,11 @@ func (c *Conn) loadSession(hello *clientHelloMsg) (cacheKey string,
 	if cacheKey == "" {
 		return "", nil, nil, nil, nil
 	}
-	session, ok := c.config.ClientSessionCache.Get(cacheKey)
-	if !ok || session == nil {
+	sess, ok := c.config.ClientSessionCache.Get(cacheKey)
+	if !ok || sess == nil {
 		return cacheKey, nil, nil, nil, nil
 	}
+	session = fromClientSessionState(sess)
 
 	// Check that version used for the previous session is still valid.
 	versOk := false
@@ -848,7 +849,7 @@ func (hs *clientHandshakeState) readSessionTicket() error {
 		return unexpectedMessageError(sessionTicketMsg, msg)
 	}
 
-	hs.session = &ClientSessionState{
+	hs.session = &clientSessionState{
 		sessionTicket:      sessionTicketMsg.ticket,
 		vers:               c.vers,
 		cipherSuite:        hs.suite.id,
