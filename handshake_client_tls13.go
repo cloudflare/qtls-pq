@@ -282,7 +282,11 @@ func (hs *clientHandshakeStateTLS13) processHelloRetryRequest() error {
 		}
 	}
 
-	hs.hello.earlyData = false // disable 0-RTT
+	if hs.hello.earlyData {
+		hs.hello.earlyData = false
+		c.quicRejectedEarlyData()
+	}
+
 	if _, err := hs.c.writeHandshakeRecord(hs.hello, hs.transcript); err != nil {
 		return err
 	}
@@ -454,6 +458,10 @@ func (hs *clientHandshakeStateTLS13) readServerParameters() error {
 			c.sendAlert(alertUnsupportedExtension)
 			return errors.New("tls: server sent an unexpected quic_transport_parameters extension")
 		}
+	}
+
+	if hs.hello.earlyData && !encryptedExtensions.earlyData {
+		c.quicRejectedEarlyData()
 	}
 
 	return nil

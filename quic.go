@@ -85,6 +85,11 @@ const (
 	// connection will never generate a QUICTransportParametersRequired event.
 	QUICTransportParametersRequired
 
+	// QUICRejectedEarlyData indicates that the server rejected 0-RTT data even
+	// if we offered it. It's returned before QUICEncryptionLevelApplication
+	// keys are returned.
+	QUICRejectedEarlyData
+
 	// QUICHandshakeDone indicates that the TLS handshake has completed.
 	QUICHandshakeDone
 )
@@ -366,6 +371,12 @@ func (c *Conn) quicGetTransportParameters() ([]byte, error) {
 func (c *Conn) quicHandshakeComplete() {
 	c.quic.events = append(c.quic.events, QUICEvent{
 		Kind: QUICHandshakeDone,
+	})
+}
+
+func (c *Conn) quicRejectedEarlyData() {
+	c.quic.events = append(c.quic.events, QUICEvent{
+		Kind: QUICRejectedEarlyData,
 	})
 }
 
