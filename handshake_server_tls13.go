@@ -22,23 +22,24 @@ import (
 const maxClientPSKIdentities = 5
 
 type serverHandshakeStateTLS13 struct {
-	c               *Conn
-	ctx             context.Context
-	clientHello     *clientHelloMsg
-	hello           *serverHelloMsg
-	sentDummyCCS    bool
-	usingPSK        bool
-	suite           *cipherSuiteTLS13
-	cert            *Certificate
-	sigAlg          SignatureScheme
-	earlySecret     []byte
-	sharedKey       []byte
-	handshakeSecret []byte
-	masterSecret    []byte
-	trafficSecret   []byte // client_application_traffic_secret_0
-	transcript      hash.Hash
-	clientFinished  []byte
-	earlyData       bool
+	c                   *Conn
+	ctx                 context.Context
+	clientHello         *clientHelloMsg
+	hello               *serverHelloMsg
+	encryptedExtensions *encryptedExtensionsMsg
+	sentDummyCCS        bool
+	usingPSK            bool
+	suite               *cipherSuiteTLS13
+	cert                *Certificate
+	sigAlg              SignatureScheme
+	earlySecret         []byte
+	sharedKey           []byte
+	handshakeSecret     []byte
+	masterSecret        []byte
+	trafficSecret       []byte // client_application_traffic_secret_0
+	transcript          hash.Hash
+	clientFinished      []byte
+	earlyData           bool
 }
 
 func (hs *serverHandshakeStateTLS13) handshake() error {
@@ -90,6 +91,7 @@ func (hs *serverHandshakeStateTLS13) processClientHello() error {
 	c := hs.c
 
 	hs.hello = new(serverHelloMsg)
+	hs.encryptedExtensions = new(encryptedExtensionsMsg)
 
 	// TLS 1.3 froze the ServerHello.legacy_version field, and uses
 	// supported_versions instead. See RFC 8446, sections 4.1.3 and 4.2.1.
@@ -273,9 +275,16 @@ func (hs *serverHandshakeStateTLS13) checkForResumption() error {
 			continue
 		}
 
-		if hs.clientHello.earlyData && sessionState.maxEarlyData == 0 {
-			c.sendAlert(alertUnsupportedExtension)
-			return errors.New("tls: client sent unexpected early data")
+		if hs.clientHello.earlyData {
+			if sessionState.maxEarlyData == 0 {
+				c.sendAlert(alertUnsupportedExtension)
+				return errors.New("tls: client sent unexpected early data")
+			}
+
+			if c.extraConfig != nil && c.extraConfig.Enable0RTT &&
+				c.extraConfig.Accept0RTT != nil && c.extraConfig.Accept0RTT(sessionState.appData) {
+				hs.encryptedExtensions.earlyData = true
+			}
 		}
 
 		createdAt := time.Unix(int64(sessionState.createdAt), 0)
@@ -326,7 +335,7 @@ func (hs *serverHandshakeStateTLS13) checkForResumption() error {
 			return errors.New("tls: invalid PSK binder")
 		}
 
-		if c.quic != nil && hs.clientHello.earlyData && i == 0 &&
+		if c.quic != nil && hs.clientHello.earlyData && hs.encryptedExtensions.earlyData && i == 0 &&
 			sessionState.maxEarlyData > 0 && sessionState.cipherSuite == hs.suite.id {
 			hs.earlyData = true
 
@@ -595,14 +604,12 @@ func (hs *serverHandshakeStateTLS13) sendServerParameters() error {
 		return err
 	}
 
-	encryptedExtensions := new(encryptedExtensionsMsg)
-
 	selectedProto, err := negotiateALPN(c.config.NextProtos, hs.clientHello.alpnProtocols, c.quic != nil)
 	if err != nil {
 		c.sendAlert(alertNoApplicationProtocol)
 		return err
 	}
-	encryptedExtensions.alpnProtocol = selectedProto
+	hs.encryptedExtensions.alpnProtocol = selectedProto
 	c.clientProtocol = selectedProto
 
 	if c.quic != nil {
@@ -610,10 +617,10 @@ func (hs *serverHandshakeStateTLS13) sendServerParameters() error {
 		if err != nil {
 			return err
 		}
-		encryptedExtensions.quicTransportParameters = p
+		hs.encryptedExtensions.quicTransportParameters = p
 	}
 
-	if _, err := hs.c.writeHandshakeRecord(encryptedExtensions, hs.transcript); err != nil {
+	if _, err := hs.c.writeHandshakeRecord(hs.encryptedExtensions, hs.transcript); err != nil {
 		return err
 	}
 

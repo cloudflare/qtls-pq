@@ -726,6 +726,11 @@ type ExtraConfig struct {
 	//
 	// It has no meaning on the client.
 	GetAppDataForSessionTicket func() []byte
+
+	// The Accept0RTT callback is called when the client offers 0-RTT.
+	// The server then has to decide if it wants to accept or reject 0-RTT.
+	// It is only used for servers.
+	Accept0RTT func(appData []byte) bool
 }
 
 // Clone clones.
@@ -733,6 +738,7 @@ func (c *ExtraConfig) Clone() *ExtraConfig {
 	return &ExtraConfig{
 		Enable0RTT:                 c.Enable0RTT,
 		GetAppDataForSessionTicket: c.GetAppDataForSessionTicket,
+		Accept0RTT:                 c.Accept0RTT,
 	}
 }
 
