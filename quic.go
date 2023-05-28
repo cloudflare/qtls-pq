@@ -45,7 +45,8 @@ type QUICConn struct {
 
 // A QUICConfig configures a QUICConn.
 type QUICConfig struct {
-	TLSConfig *Config
+	TLSConfig   *Config
+	ExtraConfig *ExtraConfig
 }
 
 // A QUICEventKind is a type of operation on a QUIC connection.
@@ -132,7 +133,7 @@ type quicState struct {
 //
 // The config's MinVersion must be at least TLS 1.3.
 func QUICClient(config *QUICConfig) *QUICConn {
-	return newQUICConn(Client(nil, config.TLSConfig))
+	return newQUICConn(Client(nil, config.TLSConfig), config.ExtraConfig)
 }
 
 // QUICServer returns a new TLS server side connection using QUICTransport as the
@@ -140,15 +141,16 @@ func QUICClient(config *QUICConfig) *QUICConn {
 //
 // The config's MinVersion must be at least TLS 1.3.
 func QUICServer(config *QUICConfig) *QUICConn {
-	return newQUICConn(Server(nil, config.TLSConfig))
+	return newQUICConn(Server(nil, config.TLSConfig), config.ExtraConfig)
 }
 
-func newQUICConn(conn *Conn) *QUICConn {
+func newQUICConn(conn *Conn, extraConfig *ExtraConfig) *QUICConn {
 	conn.quic = &quicState{
 		signalc:  make(chan struct{}),
 		blockedc: make(chan struct{}),
 	}
 	conn.quic.events = conn.quic.eventArr[:0]
+	conn.extraConfig = extraConfig
 	return &QUICConn{
 		conn: conn,
 	}

@@ -850,6 +850,29 @@ func TestCloneNilConfig(t *testing.T) {
 	}
 }
 
+func TestExtraConfigCloneNonFuncFields(t *testing.T) {
+	var c1 ExtraConfig
+	v := reflect.ValueOf(&c1).Elem()
+
+	typ := v.Type()
+	for i := 0; i < typ.NumField(); i++ {
+		f := v.Field(i)
+		// testing/quick can't handle functions or interfaces and so
+		// isn't used here.
+		switch fn := typ.Field(i).Name; fn {
+		case "Enable0RTT":
+			f.Set(reflect.ValueOf(true))
+		default:
+			t.Errorf("all fields must be accounted for, but saw unknown field %q", fn)
+		}
+	}
+
+	c2 := c1.Clone()
+	if !reflect.DeepEqual(&c1, c2) {
+		t.Errorf("clone failed to copy a field")
+	}
+}
+
 // changeImplConn is a net.Conn which can change its Write and Close
 // methods.
 type changeImplConn struct {

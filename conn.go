@@ -41,6 +41,7 @@ type Conn struct {
 	vers           uint16  // TLS version
 	haveVers       bool    // version has been negotiated
 	config         *config // configuration passed to constructor
+	extraConfig    *ExtraConfig
 	// handshakes counts the number of handshakes performed on the
 	// connection so far. If renegotiation is disabled then this is either
 	// zero or one.

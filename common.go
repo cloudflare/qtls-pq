@@ -716,6 +716,20 @@ type config struct {
 	autoSessionTicketKeys []ticketKey
 }
 
+type ExtraConfig struct {
+	// If Enable0RTT is enabled, the client will be allowed to send early data when resuming a session.
+	//
+	// It has no meaning on the client.
+	Enable0RTT bool
+}
+
+// Clone clones.
+func (c *ExtraConfig) Clone() *ExtraConfig {
+	return &ExtraConfig{
+		Enable0RTT: c.Enable0RTT,
+	}
+}
+
 const (
 	// ticketKeyNameLen is the number of bytes of identifier that is prepended to
 	// an encrypted session ticket in order to identify the key used to encrypt it.

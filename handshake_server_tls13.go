@@ -818,6 +818,10 @@ func (c *Conn) sendSessionTicket() error {
 		return err
 	}
 
+	if c.extraConfig != nil && c.extraConfig.Enable0RTT {
+		m.maxEarlyData = 0xffffffff
+	}
+
 	if _, err := c.writeHandshakeRecord(m, nil); err != nil {
 		return err
 	}
