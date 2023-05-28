@@ -816,6 +816,7 @@ func (c *Conn) sendSessionTicket(earlyData bool) error {
 			OCSPStaple:                  c.ocspResponse,
 			SignedCertificateTimestamps: c.scts,
 		},
+		alpn: c.clientProtocol,
 	}
 	if earlyData {
 		state.maxEarlyData = 0xffffffff
