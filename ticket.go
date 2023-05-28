@@ -85,6 +85,8 @@ type sessionStateTLS13 struct {
 	resumptionSecret []byte      // opaque resumption_master_secret<1..2^8-1>;
 	certificate      Certificate // CertificateEntry certificate_list<0..2^24-1>;
 	maxEarlyData     uint32
+
+	appData []byte
 }
 
 func (m *sessionStateTLS13) marshal() ([]byte, error) {
@@ -98,6 +100,9 @@ func (m *sessionStateTLS13) marshal() ([]byte, error) {
 	})
 	marshalCertificate(&b, m.certificate)
 	b.AddUint32(m.maxEarlyData)
+	b.AddUint16LengthPrefixed(func(b *cryptobyte.Builder) {
+		b.AddBytes(m.appData)
+	})
 	return b.Bytes()
 }
 
@@ -116,6 +121,7 @@ func (m *sessionStateTLS13) unmarshal(data []byte) bool {
 		len(m.resumptionSecret) != 0 &&
 		unmarshalCertificate(&s, &m.certificate) &&
 		s.ReadUint32(&m.maxEarlyData) &&
+		readUint16LengthPrefixed(&s, &m.appData) &&
 		s.Empty()
 }
 

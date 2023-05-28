@@ -850,6 +850,24 @@ func TestCloneNilConfig(t *testing.T) {
 	}
 }
 
+func TestExtraConfigCloneFuncField(t *testing.T) {
+	const expectedCount = 1
+	called := 0
+
+	c1 := ExtraConfig{
+		GetAppDataForSessionTicket: func() []byte {
+			called |= 1
+			return nil
+		},
+	}
+
+	c2 := c1.Clone()
+	c2.GetAppDataForSessionTicket()
+	if called != (1<<expectedCount)-1 {
+		t.Fatalf("expected %d calls but saw calls %b", expectedCount, called)
+	}
+}
+
 func TestExtraConfigCloneNonFuncFields(t *testing.T) {
 	var c1 ExtraConfig
 	v := reflect.ValueOf(&c1).Elem()
@@ -862,6 +880,11 @@ func TestExtraConfigCloneNonFuncFields(t *testing.T) {
 		switch fn := typ.Field(i).Name; fn {
 		case "Enable0RTT":
 			f.Set(reflect.ValueOf(true))
+		case "GetAppDataForSessionTicket":
+			// DeepEqual can't compare functions. If you add a
+			// function field to this list, you must also change
+			// TestCloneFuncFields to ensure that the func field is
+			// cloned.
 		default:
 			t.Errorf("all fields must be accounted for, but saw unknown field %q", fn)
 		}

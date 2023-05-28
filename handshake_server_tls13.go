@@ -780,10 +780,10 @@ func (hs *serverHandshakeStateTLS13) sendSessionTickets() error {
 	if !hs.shouldSendSessionTickets() {
 		return nil
 	}
-	return c.sendSessionTicket()
+	return c.sendSessionTicket(false)
 }
 
-func (c *Conn) sendSessionTicket() error {
+func (c *Conn) sendSessionTicket(earlyData bool) error {
 	suite := cipherSuiteTLS13ByID(c.cipherSuite)
 	if suite == nil {
 		return errors.New("tls: internal error: unknown cipher suite")
@@ -805,9 +805,9 @@ func (c *Conn) sendSessionTicket() error {
 			SignedCertificateTimestamps: c.scts,
 		},
 	}
-	use0RTT := c.extraConfig != nil && c.extraConfig.Enable0RTT
-	if use0RTT {
+	if earlyData {
 		state.maxEarlyData = 0xffffffff
+		state.appData = c.extraConfig.GetAppDataForSessionTicket()
 	}
 	stateBytes, err := state.marshal()
 	if err != nil {
@@ -829,7 +829,8 @@ func (c *Conn) sendSessionTicket() error {
 		return err
 	}
 
-	if use0RTT {
+	if earlyData {
+		// RFC 9001, Section 4.6.1
 		m.maxEarlyData = 0xffffffff
 	}
 

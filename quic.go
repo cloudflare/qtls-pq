@@ -258,7 +258,7 @@ func (q *QUICConn) SendSessionTicket(earlyData bool) error {
 		return quicError(errors.New("tls: SendSessionTicket called multiple times"))
 	}
 	q.sessionTicketSent = true
-	return quicError(c.sendSessionTicket())
+	return quicError(c.sendSessionTicket(earlyData))
 }
 
 // ConnectionState returns basic TLS details about the connection.

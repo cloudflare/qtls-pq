@@ -721,12 +721,18 @@ type ExtraConfig struct {
 	//
 	// It has no meaning on the client.
 	Enable0RTT bool
+
+	// GetAppDataForSessionTicket requests application data to be sent with a session ticket.
+	//
+	// It has no meaning on the client.
+	GetAppDataForSessionTicket func() []byte
 }
 
 // Clone clones.
 func (c *ExtraConfig) Clone() *ExtraConfig {
 	return &ExtraConfig{
-		Enable0RTT: c.Enable0RTT,
+		Enable0RTT:                 c.Enable0RTT,
+		GetAppDataForSessionTicket: c.GetAppDataForSessionTicket,
 	}
 }
 
