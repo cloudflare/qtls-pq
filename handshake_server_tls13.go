@@ -798,6 +798,10 @@ func (c *Conn) sendSessionTicket() error {
 			SignedCertificateTimestamps: c.scts,
 		},
 	}
+	use0RTT := c.extraConfig != nil && c.extraConfig.Enable0RTT
+	if use0RTT {
+		state.maxEarlyData = 0xffffffff
+	}
 	stateBytes, err := state.marshal()
 	if err != nil {
 		c.sendAlert(alertInternalError)
@@ -818,7 +822,7 @@ func (c *Conn) sendSessionTicket() error {
 		return err
 	}
 
-	if c.extraConfig != nil && c.extraConfig.Enable0RTT {
+	if use0RTT {
 		m.maxEarlyData = 0xffffffff
 	}
 
