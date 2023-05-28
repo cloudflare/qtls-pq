@@ -282,6 +282,7 @@ func (hs *clientHandshakeStateTLS13) processHelloRetryRequest() error {
 		}
 	}
 
+	hs.hello.earlyData = false // disable 0-RTT
 	if _, err := hs.c.writeHandshakeRecord(hs.hello, hs.transcript); err != nil {
 		return err
 	}
@@ -750,7 +751,7 @@ func (c *Conn) handleNewSessionTicket(msg *newSessionTicketMsgTLS13) error {
 
 	cacheKey := c.clientSessionCacheKey()
 	if cacheKey != "" {
-	c.config.ClientSessionCache.Put(cacheKey, toClientSessionState(session))
+		c.config.ClientSessionCache.Put(cacheKey, toClientSessionState(session))
 	}
 
 	return nil

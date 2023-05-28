@@ -495,6 +495,11 @@ func (hs *serverHandshakeStateTLS13) doHelloRetryRequest(selectedGroup CurveID) 
 		return errors.New("tls: client illegally modified second ClientHello")
 	}
 
+	if illegalClientHelloChange(clientHello, hs.clientHello) {
+		c.sendAlert(alertIllegalParameter)
+		return errors.New("tls: client illegally modified second ClientHello")
+	}
+
 	hs.clientHello = clientHello
 	return nil
 }
