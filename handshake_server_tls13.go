@@ -38,6 +38,7 @@ type serverHandshakeStateTLS13 struct {
 	trafficSecret   []byte // client_application_traffic_secret_0
 	transcript      hash.Hash
 	clientFinished  []byte
+	earlyData       bool
 }
 
 func (hs *serverHandshakeStateTLS13) handshake() error {
@@ -323,6 +324,18 @@ func (hs *serverHandshakeStateTLS13) checkForResumption() error {
 		if !hmac.Equal(hs.clientHello.pskBinders[i], pskBinder) {
 			c.sendAlert(alertDecryptError)
 			return errors.New("tls: invalid PSK binder")
+		}
+
+		if c.quic != nil && hs.clientHello.earlyData && i == 0 &&
+			sessionState.maxEarlyData > 0 && sessionState.cipherSuite == hs.suite.id {
+			hs.earlyData = true
+
+			transcript := hs.suite.hash.New()
+			if err := transcriptMsg(hs.clientHello, transcript); err != nil {
+				return err
+			}
+			earlyTrafficSecret := hs.suite.deriveSecret(hs.earlySecret, clientEarlyTrafficLabel, transcript)
+			c.quicSetReadSecret(QUICEncryptionLevelEarly, hs.suite.id, earlyTrafficSecret)
 		}
 
 		c.didResume = true

@@ -200,6 +200,16 @@ func (c *Conn) clientHandshake(ctx context.Context) (err error) {
 		return err
 	}
 
+	if hello.earlyData {
+		suite := cipherSuiteTLS13ByID(session.cipherSuite)
+		transcript := suite.hash.New()
+		if err := transcriptMsg(hello, transcript); err != nil {
+			return err
+		}
+		earlyTrafficSecret := suite.deriveSecret(earlySecret, clientEarlyTrafficLabel, transcript)
+		c.quicSetWriteSecret(QUICEncryptionLevelEarly, suite.id, earlyTrafficSecret)
+	}
+
 	// serverHelloMsg is not included in the transcript
 	msg, err := c.readHandshake(nil)
 	if err != nil {
@@ -345,7 +355,6 @@ func (c *Conn) loadSession(hello *clientHelloMsg) (cacheKey string,
 		return cacheKey, nil, nil, nil, nil
 	}
 	maxEarlyData := binary.BigEndian.Uint32(session.nonce[:4])
-	_ = maxEarlyData
 	session.nonce = session.nonce[4:]
 
 	// Check that the session ticket is not expired.
@@ -370,6 +379,13 @@ func (c *Conn) loadSession(hello *clientHelloMsg) (cacheKey string,
 	}
 	if !cipherSuiteOk {
 		return cacheKey, nil, nil, nil, nil
+	}
+
+	if c.quic != nil && maxEarlyData > 0 {
+		// For 0-RTT, the cipher suite has to match exactly.
+		if mutualCipherSuite(hello.cipherSuites, session.cipherSuite) != nil {
+			hello.earlyData = true
+		}
 	}
 
 	// Set the pre_shared_key extension. See RFC 8446, Section 4.2.11.1.

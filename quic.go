@@ -16,6 +16,7 @@ type QUICEncryptionLevel int
 
 const (
 	QUICEncryptionLevelInitial = QUICEncryptionLevel(iota)
+	QUICEncryptionLevelEarly
 	QUICEncryptionLevelHandshake
 	QUICEncryptionLevelApplication
 )
@@ -24,6 +25,8 @@ func (l QUICEncryptionLevel) String() string {
 	switch l {
 	case QUICEncryptionLevelInitial:
 		return "Initial"
+	case QUICEncryptionLevelEarly:
+		return "Early"
 	case QUICEncryptionLevelHandshake:
 		return "Handshake"
 	case QUICEncryptionLevelApplication:
@@ -109,10 +112,10 @@ type quicState struct {
 	nextEvent int
 
 	// eventArr is a statically allocated event array, large enough to handle
-	// the usual maximum number of events resulting from a single call:
-	// transport parameters, Initial data, Handshake write and read secrets,
-	// Handshake data, Application write secret, Application data.
-	eventArr [7]QUICEvent
+	// the usual maximum number of events resulting from a single call: transport
+	// parameters, Initial data, Early read secret, Handshake write and read
+	// secrets, Handshake data, Application write secret, Application data.
+	eventArr [8]QUICEvent
 
 	started  bool
 	signalc  chan struct{}   // handshake data is available to be read
