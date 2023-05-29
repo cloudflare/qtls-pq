@@ -851,7 +851,7 @@ func TestCloneNilConfig(t *testing.T) {
 }
 
 func TestExtraConfigCloneFuncField(t *testing.T) {
-	const expectedCount = 2
+	const expectedCount = 4
 	called := 0
 
 	c1 := ExtraConfig{
@@ -863,11 +863,20 @@ func TestExtraConfigCloneFuncField(t *testing.T) {
 			called |= 1 << 1
 			return true
 		},
+		GetAppDataForSessionState: func() []byte {
+			called |= 1 << 2
+			return nil
+		},
+		SetAppDataFromSessionState: func([]byte) {
+			called |= 1 << 3
+		},
 	}
 
 	c2 := c1.Clone()
 	c2.GetAppDataForSessionTicket()
 	c2.Accept0RTT(nil)
+	c2.GetAppDataForSessionState()
+	c2.SetAppDataFromSessionState(nil)
 	if called != (1<<expectedCount)-1 {
 		t.Fatalf("expected %d calls but saw calls %b", expectedCount, called)
 	}
@@ -885,7 +894,7 @@ func TestExtraConfigCloneNonFuncFields(t *testing.T) {
 		switch fn := typ.Field(i).Name; fn {
 		case "Enable0RTT":
 			f.Set(reflect.ValueOf(true))
-		case "GetAppDataForSessionTicket", "Accept0RTT":
+		case "Accept0RTT", "GetAppDataForSessionTicket", "GetAppDataForSessionState", "SetAppDataFromSessionState":
 			// DeepEqual can't compare functions. If you add a
 			// function field to this list, you must also change
 			// TestCloneFuncFields to ensure that the func field is

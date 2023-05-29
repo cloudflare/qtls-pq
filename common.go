@@ -731,6 +731,15 @@ type ExtraConfig struct {
 	// The server then has to decide if it wants to accept or reject 0-RTT.
 	// It is only used for servers.
 	Accept0RTT func(appData []byte) bool
+
+	// Is called when the client saves a session ticket to the session ticket.
+	// This gives the application the opportunity to save some data along with the ticket,
+	// which can be restored when the session ticket is used.
+	GetAppDataForSessionState func() []byte
+
+	// Is called when the client uses a session ticket.
+	// Restores the application data that was saved earlier on GetAppDataForSessionTicket.
+	SetAppDataFromSessionState func([]byte)
 }
 
 // Clone clones.
@@ -739,6 +748,8 @@ func (c *ExtraConfig) Clone() *ExtraConfig {
 		Enable0RTT:                 c.Enable0RTT,
 		GetAppDataForSessionTicket: c.GetAppDataForSessionTicket,
 		Accept0RTT:                 c.Accept0RTT,
+		GetAppDataForSessionState:  c.GetAppDataForSessionState,
+		SetAppDataFromSessionState: c.SetAppDataFromSessionState,
 	}
 }
 
