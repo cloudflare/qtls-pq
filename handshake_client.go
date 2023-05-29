@@ -419,7 +419,7 @@ func (c *Conn) loadSession(hello *clientHelloMsg) (cacheKey string,
 
 	if c.quic != nil && maxEarlyData > 0 {
 		// For 0-RTT, the cipher suite has to match exactly.
-		if mutualCipherSuite(hello.cipherSuites, session.cipherSuite) != nil {
+		if mutualCipherSuiteTLS13(hello.cipherSuites, session.cipherSuite) != nil {
 			hello.earlyData = true
 		}
 	}
