@@ -170,3 +170,17 @@ func TestClientSessionStateReinterpretCast(t *testing.T) {
 // 		t.Fatal("failed")
 // 	}
 // }
+
+func TestInitSessionTicketKeys(t *testing.T) {
+	c1 := testConfig.Clone()
+	InitSessionTicketKeys(c1)
+	c2 := c1.Clone()
+
+	stk := fromConfig(c1).autoSessionTicketKeys
+	if len(stk) == 0 {
+		t.Fatal("no session ticket keys")
+	}
+	if !reflect.DeepEqual(stk, fromConfig(c2).autoSessionTicketKeys) {
+		t.Fatal("session ticket keys don't match")
+	}
+}
