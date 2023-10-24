@@ -867,8 +867,9 @@ func TestExtraConfigCloneFuncField(t *testing.T) {
 			called |= 1 << 2
 			return nil
 		},
-		SetAppDataFromSessionState: func([]byte) {
+		SetAppDataFromSessionState: func([]byte) bool {
 			called |= 1 << 3
+			return true
 		},
 	}
 
